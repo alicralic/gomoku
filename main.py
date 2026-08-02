@@ -44,8 +44,6 @@ class Board:
             return row,col
 
 
-
-
 class Game:
     PLAYER_1 = "X"
     PLAYER_2 = "O"
@@ -55,6 +53,14 @@ class Game:
         self.current_player = 1
         self.winner = None
         self.game_over = False
+        self.playerScore = 0
+        self.aiScore = 0
+        self.restart = pygame.image.load("playagain.png")
+        self.restartBut = self.restart.get_rect(center=(400, 450))
+        self.addedScore = False
+        self.back = pygame.image.load("back_button.png")
+        self.backBut = self.back.get_rect(center = (50,75))
+        self.starting = True
     
     def switchPlayer(self):
         if self.current_player == 1:
@@ -62,11 +68,14 @@ class Game:
         else:
             self.current_player = 1
     
-    def restart(self):
+    def restarting(self):
         self.board.reset()
         self.winner = None
         self.game_over = False
         self.current_player = 1
+        self.addedScore = False
+        self.game_over = False
+
     
     def playMove(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -99,24 +108,24 @@ class Game:
                 # Horizontal
                 if col <= size - 5:
                     if all(grid[row][col + i] == value for i in range(5)):
-                        return "Horizontal", row, col
+                        return "Horizontal", row, col, value
 
                 # Vertical
                 if row <= size - 5:
                     if all(grid[row + i][col] == value for i in range(5)):
-                        return "Vertical", row, col
+                        return "Vertical", row, col, value
 
                 # Diagonal: top-left to bottom-right
                 if row <= size - 5 and col <= size - 5:
                     if all(grid[row + i][col + i] == value for i in range(5)):
-                        return "DiagonalL2R", row, col
+                        return "DiagonalL2R", row, col, value
 
                 # Diagonal: top-right to bottom-left
                 if row <= size - 5 and col >= 4:
                     if all(grid[row + i][col - i] == value for i in range(5)):
-                        return "DiagonalR2L", row, col
+                        return "DiagonalR2L", row, col, value
 
-        return None, None, None
+        return None, None, None, None
 
     
     def displayWin(self, winType, row, col):
@@ -149,8 +158,6 @@ class Game:
         )
            
 
-
-
 class DrawPiece:
 
     def __init__(self, game):
@@ -174,10 +181,10 @@ class DrawPiece:
 
 
 class AIplay:
-    def __init__(self, level, game):
+    def __init__(self, game):
         self.waitingTime = 500
         self.potential = False
-        self.level = level
+        self.level = 0
         self.game = game
         self.waiting = False
         self.startTime = 0
@@ -325,20 +332,32 @@ class AIplay:
                 return False
 
     def move(self):
-        if not self.blocking():
-            if not self.findWin():
+        if self.level >= 3:
+            if not self.blocking():
+                if not self.findWin():
+                    self.randomMove()
+        elif self.level >= 2:
+            if not self.blocking():
                 self.randomMove()
+        else:
+            self.randomMove()
             
 
 game = Game()
 draw = DrawPiece(game)
 game.board.reset()
-ai = AIplay(1, game)
-                
+ai = AIplay(game)
+    
             
 playing = True
 
-playing = True
+easy_r = 50
+medium_r = 50
+hard_r = 50
+
+easy = pygame.draw.circle(main, (100,255,100), (200,450), easy_r)
+medium = pygame.draw.circle(main, (255,180,80),(400,450), medium_r)
+hard = pygame.draw.circle(main, (255,100,100), (600,450), hard_r)
 
 while playing:
     clock.tick(60)
@@ -347,33 +366,130 @@ while playing:
         if event.type == pygame.QUIT:
             playing = False
 
-        if not game.game_over and game.current_player == 1:
+        if not game.game_over and not game.starting and game.current_player == 1:
             game.playMove(event)
+        
+        mouse_pos = pygame.mouse.get_pos() #animations
 
-    result, row, col = game.checkWin()
+        if easy.collidepoint(mouse_pos):
+            easy_r = 60
+        else:
+            easy_r = 50     
+        if medium.collidepoint(mouse_pos):
+            medium_r = 60
+        else:
+            medium_r = 50
+        if hard.collidepoint(mouse_pos):
+            hard_r = 60
+        else:
+            hard_r = 50
 
-    if result is not None:
-        game.game_over = True
+        if event.type == pygame.MOUSEBUTTONDOWN: #pressing buttons
 
-    if not game.game_over and game.current_player == 2:
+            if game.game_over:
+                if game.restartBut.collidepoint(event.pos):
+                    game.restarting()
 
-        if not ai.waiting:
-            ai.waiting = True
-            ai.startTime = pygame.time.get_ticks()
+                elif game.backBut.collidepoint(event.pos):
+                    game.restarting()
+                    game.starting = True
+                    game.playerScore = 0
+                    game.aiScore = 0
 
-        elif pygame.time.get_ticks() - ai.startTime >= ai.waitingTime:
-            ai.move()
-            ai.waiting = False
+            elif game.starting:
+                if easy.collidepoint(event.pos):
+                    ai.level = 1
+                    game.starting = False
+
+                elif medium.collidepoint(event.pos):
+                    ai.level = 2
+                    game.starting = False
+
+                elif hard.collidepoint(event.pos):
+                    ai.level = 3
+                    game.starting = False
+
+            else:
+                if game.backBut.collidepoint(event.pos):
+                    game.restarting()
+                    game.starting = True
+                    game.playerScore = 0
+                    game.aiScore = 0
+
+
+
+    result, row, col, winner = game.checkWin()
+    
+    if not game.starting: #delay between ai times and times before showing winning screen
+
+        if result is not None and not game.game_over:
+            game.game_over = True
+            seeRel = pygame.time.get_ticks()
+            
+
+        if not game.game_over and game.current_player == 2:
+
+            if not ai.waiting:
+                ai.waiting = True
+                ai.startTime = pygame.time.get_ticks()
+
+            elif pygame.time.get_ticks() - ai.startTime >= ai.waitingTime:
+                ai.move()
+                ai.waiting = False
 
     main.fill((50, 30, 72))
-    game.board.drawBoard()
-    draw.place_piece()
+    if not game.game_over and not game.starting: #main screen
+        game.board.drawBoard()
+        main.blit(game.back, game.backBut)
+        draw.place_piece()
+    elif game.game_over:
+        time_since_win = pygame.time.get_ticks() - seeRel
 
-    if result is not None:
-        game.displayWin(result, row, col)
+        if time_since_win < 500: 
+            game.board.drawBoard()
+            draw.place_piece()
+            game.displayWin(result, row, col)
+
+        else: #ending bit
+
+            if winner == "X":
+                playerWin = "You"
+                if not game.addedScore:
+                    game.playerScore += 1
+                    game.addedScore = True
+            elif winner == "O":
+                playerWin = "Robot"
+                if not game.addedScore:
+                    game.aiScore += 1
+                    game.addedScore = True
+            else:
+                playerWin = "Draw"
+
+            if playerWin != "Draw":
+                winText = font.render(f"{playerWin} win!", True, (217,255,244))
+            else:
+                winText = font.render("It's a draw!", True, (217,255,244))
+
+            main.blit(game.restart, game.restartBut)
+            main.blit(game.back, game.backBut)
+            scoring = subfont.render(f"Player's score: {game.playerScore}   AI's score: {game.aiScore}", True, (217,255,244))
+            scoring_rect = scoring.get_rect(center=(400,300))
+            winText_rect = winText.get_rect(center=(400,200))
+            main.blit(winText, winText_rect)
+            main.blit(scoring, scoring_rect)
+        
+    elif game.starting:
+        welcome = font.render("Gomoku", True, (217,255,244))
+        welcome_rect = welcome.get_rect(center=(400,200))
+        main.blit(welcome, welcome_rect)
+
+        easy = pygame.draw.circle(main, (100,255,100), (200,450), easy_r)
+        medium = pygame.draw.circle(main, (255,180,80),(400,450), medium_r)
+        hard = pygame.draw.circle(main, (255,100,100), (600,450), hard_r)
+
+                        
 
     pygame.display.update()
 
 pygame.quit()
-    
     
