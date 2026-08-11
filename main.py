@@ -188,6 +188,231 @@ class AIplay:
         self.game = game
         self.waiting = False
         self.startTime = 0
+        self.vector = [
+            [1,0],
+            [0,1],
+            [1,1],
+            [1,-1]
+        ]
+
+        self.hypotheticalBoard = []
+
+#minimax algorithms:
+
+    def alphabeta(self, state, depth, alpha, beta, isMaximising):
+        if depth == 0 or self.isTerminal():
+            return self.evaluate(state)
+        
+        if isMaximising: #AI maximising
+            bestval = float('-inf')
+            for pos in self.orderedMove("O"):
+                row, col = pos
+                state = self.applyMove(pos, "O")
+                value = self.alphabeta(state, depth-1, alpha, beta, False)
+                self.hypotheticalBoard[row][col] = "" #for next move
+                bestval = max(bestval, value)
+                alpha = max(alpha, bestval)
+                if alpha >= beta:
+                    break
+            return bestval
+        
+        else: #HUMAN minimising
+            bestval = float('inf')
+            for pos in self.orderedMove("X"):
+                row, col = pos
+                state = self.applyMove(pos, "X")
+                value = self.alphabeta(state, depth - 1, alpha, beta, True)
+                self.hypotheticalBoard[row][col] = "" #for next move
+                bestval = min(bestval, value)
+                beta = min(beta, bestval)
+                if alpha >= beta:
+                    break
+            return bestval
+
+    def orderedMove(self, player):
+        considerCells = []
+        length = 0
+        for row in range(self.game.board.SIZE):
+            for col in range(self.game.board.SIZE):
+                if self.hypotheticalBoard[row][col] == "":
+                    for pos in self.vector:
+                        x, y = pos
+
+                        #boundcheck
+                        if row + x >= self.game.board.SIZE or row + x < 0:
+                            continue
+                        if col + y >= self.game.board.SIZE or col + y < 0:
+                            continue
+
+                        if self.hypotheticalBoard[row + x][col + y] == player:
+
+                            for i in range(3):
+                                if x == 0: pass
+                                elif x > 0: x += 1
+                                elif x < 0: x -= 1
+                                if y == 0: pass
+                                elif y > 0: y += 1
+                                elif y < 0: y -= 1
+
+                                #boundcheck
+                                if row + x >= self.game.board.SIZE or row + x < 0:
+                                    break
+                                if col + y >= self.game.board.SIZE or col + y < 0:
+                                    break
+
+                                if self.hypotheticalBoard[row+x][col+y] == player:
+                                    length = i + 1
+                                else:
+                                    length = i
+                                    break
+
+                            if length == 4:
+                                considerCells.insert(0, [row, col])
+                            else:
+                                considerCells.append([row,col])
+                            
+                            break
+
+        return considerCells
+
+    def applyMove(self, pos, player):
+        if not self.hypotheticalBoard:
+            self.hypotheticalBoard = [row[:] for row in self.game.board.grid]
+        row, col = pos
+        self.hypotheticalBoard[row][col] = player
+        return self.hypotheticalBoard
+
+    def isTerminal(self): 
+
+        empty = 0
+        for row in range(self.game.board.SIZE): #check for empty board
+            for col in range(self.game.board.SIZE):
+                if self.hypotheticalBoard[row][col] == "":
+                    empty += 1
+        if empty == 0:
+            return True
+        else: 
+            for row in range(self.game.board.SIZE): #check for winning strokes
+                for col in range(self.game.board.SIZE):
+                    box = self.hypotheticalBoard[row][col]
+                    if box == "":
+                        continue
+                    else:
+                        for vec in self.vector:
+                            x, y = vec
+                            line = 1
+                            for i in range(4):
+                                if self.hypotheticalBoard[row+x][col+y] == box:
+                                    line += 1
+                                else:
+                                    break
+                                if x == 0: continue
+                                elif x > 0: x += 1
+                                elif x < 0: x -= 1
+                                if y == 0: continue
+                                elif y > 0: y += 1
+                                elif y < 0: y -= 1
+
+                                #boundcheck
+                                if row + x >= self.game.board.SIZE or row + x < 0:
+                                    break
+                                if col + y >= self.game.board.SIZE or col + y < 0:
+                                    break
+
+                            if line == 5:
+                                return True
+
+        return False
+
+    def evaluate(self, state):
+        score = 0
+        size = self.game.board.SIZE
+
+        for row in range(size):
+            for col in range(size):
+                box = self.hypotheticalBoard[row][col]
+                if box == "":
+                    continue
+
+                for vec in self.vector:
+                    x, y = vec
+
+                    # skip if this isn't the START of a run — the cell just
+                    # before this one (in this same direction) is already
+                    # the same player, meaning this run was already counted
+                    # starting from that earlier cell
+                    prevRow, prevCol = row - x, col - y
+                    if 0 <= prevRow < size and 0 <= prevCol < size and self.hypotheticalBoard[prevRow][prevCol] == box:
+                        continue
+
+                    line = 1
+                    for i in range(4):
+                        #boundcheck
+                        if row + x >= size or row + x < 0:
+                            break
+                        if col + y >= size or col + y < 0:
+                            break
+
+                        if self.hypotheticalBoard[row+x][col+y] == box:
+                            line += 1
+                        else:
+                            break
+
+                        if x == 0: pass
+                        elif x > 0: x += 1
+                        elif x < 0: x -= 1
+                        if y == 0: pass
+                        elif y > 0: y += 1
+                        elif y < 0: y -= 1
+
+                    if line >= 5:
+                        value = 100000
+                    elif line == 4:
+                        value = 1000
+                    elif line == 3:
+                        value = 100
+                    elif line == 2:
+                        value = 10
+                    else:
+                        value = 0
+
+                    if box == "O":
+                        score += value
+                    else:
+                        score -= value
+
+        return score
+
+    def findBestMove(self, depth):
+        self.hypotheticalBoard = [row[:] for row in self.game.board.grid]
+
+        bestVal = float('-inf')
+        alpha = float('-inf')
+        beta = float('inf')
+        bestMove = None
+
+        for pos in self.orderedMove("O"):
+            row, col = pos
+            self.hypotheticalBoard[row][col] = "O"
+            value = self.alphabeta(self.hypotheticalBoard, depth - 1, alpha, beta, False)
+            self.hypotheticalBoard[row][col] = ""
+
+            if value > bestVal:
+                bestVal = value
+                bestMove = pos
+            alpha = max(alpha, bestVal)
+
+        if bestMove is None:
+            self.move()
+            
+        else:
+            row, col = bestMove
+            self.game.board.grid[row][col] = "O"
+            self.game.switchPlayer()
+
+
+
+#simple dimple things
 
     def randomMove(self): #level 1
         empty_cells = []
@@ -331,6 +556,8 @@ class AIplay:
             else:
                 return False
 
+
+
     def move(self):
         if self.level >= 3:
             if not self.blocking():
@@ -368,7 +595,7 @@ while playing:
 
         if not game.game_over and not game.starting and game.current_player == 1:
             game.playMove(event)
-        
+#level stuff
         mouse_pos = pygame.mouse.get_pos() #animations
 
         if easy.collidepoint(mouse_pos):
@@ -416,7 +643,7 @@ while playing:
                     game.playerScore = 0
                     game.aiScore = 0
 
-
+#
 
     result, row, col, winner = game.checkWin()
     
@@ -434,7 +661,7 @@ while playing:
                 ai.startTime = pygame.time.get_ticks()
 
             elif pygame.time.get_ticks() - ai.startTime >= ai.waitingTime:
-                ai.move()
+                ai.findBestMove(5)
                 ai.waiting = False
 
     main.fill((50, 30, 72))
@@ -442,7 +669,7 @@ while playing:
         game.board.drawBoard()
         main.blit(game.back, game.backBut)
         draw.place_piece()
-    elif game.game_over:
+    elif game.game_over:#game over screen
         time_since_win = pygame.time.get_ticks() - seeRel
 
         if time_since_win < 500: 
@@ -478,14 +705,24 @@ while playing:
             main.blit(winText, winText_rect)
             main.blit(scoring, scoring_rect)
         
-    elif game.starting:
+    elif game.starting:#starting screen
         welcome = font.render("Gomoku", True, (217,255,244))
         welcome_rect = welcome.get_rect(center=(400,200))
         main.blit(welcome, welcome_rect)
 
+        easyW = subfont.render("Easy", True, (217,255,244))
+        easyW_rect = easyW.get_rect(center=(200,350))
+        mediumW = subfont.render("Medium", True, (217,255,244))
+        mediumW_rect = mediumW.get_rect(center=(400,350))
+        hardW = subfont.render("Hard", True, (217,255,244))
+        hardW_rect = hardW.get_rect(center=(600,350))
         easy = pygame.draw.circle(main, (100,255,100), (200,450), easy_r)
         medium = pygame.draw.circle(main, (255,180,80),(400,450), medium_r)
         hard = pygame.draw.circle(main, (255,100,100), (600,450), hard_r)
+        main.blit(easyW, easyW_rect)
+        main.blit(mediumW, mediumW_rect)
+        main.blit(hardW, hardW_rect)
+
 
                         
 
